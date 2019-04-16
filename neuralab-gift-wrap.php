@@ -2,14 +2,14 @@
 /**
  * Plugin Name:  Neuralab WooCommerce Gift Wrapper
  * Description:  Simple plugin which offers gift wrap for bought merchandise
- * Version:      1.0
+ * Version:      1.0.1
  * Author:       Petak @ Neuralab
  * Author URI:   neuralab.net
  * Text Domain:  neuralab-giftwrap
  * Domain Path:  /lang/
  *
  * WC requires at least: 3.0
- * WC tested up to: 3.2.6
+ * WC tested up to: 3.5.6
  */
 
 /**
@@ -119,7 +119,7 @@ function neuralab_gift_wrap_tax() {
  */
 function neuralab_gift_wrap_feedback() {
   ?>
-  <p><?php _e( 'You can provide feedback or comments on plugin\'s <a href="#">GitHub repo</a>.', 'neuralab-giftwrap' ); ?> </p>
+  <p><?php echo sprintf( __( 'You can provide feedback or comments on plugin\'s <a href="%s">GitHub repo</a>.', 'neuralab-giftwrap' ), 'https://github.com/Neuralab/Neuralab-WooCommerce-Gift-Wrapper' ); ?></p>
   <?php
 }
 
@@ -177,13 +177,13 @@ function neuralab_gift_wrap_option() {
   if ( neuralab_gift_wrap_option_enabled() ) {
     ?>
     <div class="gift-wrap">
-      <h3><?php _e( 'Add Gift Wrapping', 'neuralab-giftwrap' ); ?> </h3>
+      <h3><?php echo apply_filters( 'neuralab_gift_wrap_option_title', __( 'Add Gift Wrapping', 'neuralab-giftwrap' ) ); ?></h3>
       <?php
       woocommerce_form_field(
         'gift-wrap-check', [
           'type'        => 'checkbox',
           'class'       => [ 'gift-wrap-input' ],
-          'label'       => sprintf( __( 'Wrap as a gift (%s)', 'neuralab-giftwrap' ), neuralab_gift_wrap_get_price_formatted() ),
+          'label'       => sprintf( apply_filters( 'neuralab_gift_wrap_option_label', __( 'Wrap as a gift (%s)', 'neuralab-giftwrap' ) ), neuralab_gift_wrap_get_price_formatted() ),
           'placeholder' => '',
         ], WC()->checkout()->get_value( 'gift-wrap-check' )
       );
@@ -228,6 +228,24 @@ function neuralab_gift_wrap_get_price() {
 }
 
 /**
+ * Check if multicurrency is enabled and edit the price accordingly.
+ *
+ * @param  float $price Price in default currency.
+ * @return float        Price in current currency.
+ */
+function neuralab_gift_wrap_get_multicurrency_price( $price ) {
+  if ( function_exists( 'wcml_is_multi_currency_on' ) && wcml_is_multi_currency_on() ) {
+    global $woocommerce_wpml;
+
+    $currency = apply_filters( 'wcml_price_currency', null );
+
+    $price *= $currency ? $woocommerce_wpml->multi_currency->exchange_rate_services->get_currency_rate( $currency ) : 1;
+  }
+
+  return $price;
+}
+
+/**
  * Calculating tax on price and returning flat or taxed price
  *
  * @param  boolean $formatted Should the returned price be wrapped in wp_price
@@ -242,17 +260,18 @@ function neuralab_gift_wrap_tax_price( $formatted = false ) {
     $gift_wrap_price_tax_raw   = WC_Tax::get_tax_total( $gift_wrap_price_tax_array );
     $gift_wrap_price_tax       = wc_round_tax_total( $gift_wrap_price_tax_raw );
 
+    $gift_wrap_price = neuralab_gift_wrap_get_price();
+
     if ( $formatted ) {
-      return neuralab_gift_wrap_get_price() + $gift_wrap_price_tax;
+      $gift_wrap_price += $gift_wrap_price_tax;
     } else {
       if ( wc_prices_include_tax() ) {
-        return neuralab_gift_wrap_get_price() - $gift_wrap_price_tax;
-      } else {
-        return neuralab_gift_wrap_get_price();
+        $gift_wrap_price -= $gift_wrap_price_tax;
       }
     }
   }
-  return neuralab_gift_wrap_get_price();
+
+  return neuralab_gift_wrap_get_multicurrency_price( $gift_wrap_price );
 }
 
 /**
@@ -263,12 +282,12 @@ function neuralab_gift_wrap_tax_price( $formatted = false ) {
 function neuralab_gift_wrap_get_price_formatted() {
   if ( neuralab_gift_wrap_tax_enabled() ) {
     if ( ! wc_prices_include_tax() && WC()->cart->tax_display_cart === 'incl' ) {
-      return wc_price( neuralab_gift_wrap_tax_price( true ) ) . ' ' . WC()->countries->inc_tax_or_vat();
+      return wc_price( neuralab_gift_wrap_get_multicurrency_price( neuralab_gift_wrap_tax_price( true ) ) ) . ' ' . WC()->countries->inc_tax_or_vat();
     } elseif ( wc_prices_include_tax() && WC()->cart->tax_display_cart === 'excl' ) {
-      return wc_price( neuralab_gift_wrap_tax_price() ) . ' ' . WC()->countries->ex_tax_or_vat();
+      return wc_price( neuralab_gift_wrap_get_multicurrency_price( neuralab_gift_wrap_tax_price() ) ) . ' ' . WC()->countries->ex_tax_or_vat();
     }
   }
-  return wc_price( neuralab_gift_wrap_get_price() );
+  return wc_price( neuralab_gift_wrap_get_multicurrency_price( neuralab_gift_wrap_get_price() ) );
 }
 
 /**
